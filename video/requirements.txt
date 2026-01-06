@@ -1,0 +1,18 @@
+# Core
+flask==3.0.3
+waitress==3.0.2
+
+# YOLO / PyTorch (CPU)
+torch==2.1.2
+torchvision==0.16.2
+torchaudio==2.1.2
+ultralytics==8.0.196
+
+# Video / Image
+opencv-python==4.9.0.80
+numpy==1.26.4
+
+# Utilities
+pillow==10.4.0
+requests==2.32.3
+python-multipart==0.0.5
