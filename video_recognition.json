@@ -1,0 +1,2149 @@
+{
+  "name": "video update",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -432,
+        -80
+      ],
+      "id": "668e7fe6-35b5-4763-a605-8e23454d538f",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9002/detect-mask",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "face_id",
+              "value": "={{ $json.face_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "face"
+            },
+            {
+              "name": "face_id",
+              "value": "={{ $json.face_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        352,
+        480
+      ],
+      "id": "e0d2432d-081e-4186-b23a-fe36be99dd13",
+      "name": "Mask Detection"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9003/detect-glasses",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "face_id",
+              "value": "={{ $json.face_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "face"
+            },
+            {
+              "name": "face_id",
+              "value": "={{ $json.face_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        352,
+        320
+      ],
+      "id": "b6dfcc6e-b5fa-425c-bb63-a27f206d3e64",
+      "name": "Glasses Detection",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.1.166:9006/video_preprocess",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"video_base64\":\"{{ $json.data }}\",\"represent_url\":\"http://host.containers.internal:3000/represent\"}",
+        "options": {}
+      },
+      "id": "e8e3def6-eecd-448a-b9f2-e8e806e956b4",
+      "name": "Video Preprocess API2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -32,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c316d45b-6e02-4f36-816c-a530d5b98b9e",
+              "leftValue": "={{ $json.has_sunglasses }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "100aa584-f0d3-4321-97c2-21fdfe7ff3d8",
+              "leftValue": "={{ $json.has_mask }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        400
+      ],
+      "id": "1c701f3f-f0a5-4016-a6ab-c6bb453de827",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "binaryToPropery",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -224,
+        400
+      ],
+      "id": "1bd446d5-4715-46bd-93fd-1ebdb82d8204",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = [];\nconst item = items[0];\nconst faces = item.json.faces || [];\n\nfor (const face of faces) {\n\n  const face_id = `${face.frame_index ?? 0}_${Math.random()\n    .toString(36)\n    .slice(2, 8)}`;\n\n  let cropB64 = face.face_crop_b64 || '';\n  let previewB64 = face.face_preview_b64 || '';\n\n  if (!cropB64) continue;\n\n  cropB64 = cropB64.replace(/(\\r\\n|\\n|\\r)/gm, '').trim();\n  if (previewB64) {\n    previewB64 = previewB64.replace(/(\\r\\n|\\n|\\r)/gm, '').trim();\n  }\n\n  output.push({\n    json: {\n      ...face,\n      face_id,\n    },\n    binary: {\n      face: {\n        data: cropB64,\n        mimeType: 'image/jpeg',\n        fileExtension: 'jpg',\n        fileName: 'face_crop.jpg',\n      },\n      ...(previewB64\n        ? {\n            preview: {\n              data: previewB64,\n              mimeType: 'image/jpeg',\n              fileExtension: 'jpg',\n              fileName: `${face_id}.jpg`,\n            },\n          }\n        : {}),\n    },\n  });\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        400
+      ],
+      "id": "e92b9bb1-1fac-48bd-93f1-38dbfa80733c",
+      "name": "Preview"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        48,
+        -64
+      ],
+      "id": "a9be4e86-af89-49fc-b2ea-0ed09073b1b5",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "aZ0wcdY297xIFSBt",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map((item, index) => {\n  const emb = item.json.embedding;\n\n  if (!Array.isArray(emb)) {\n    throw new Error(`Embedding missing or not an array on item ${index}`);\n  }\n\n  return {\n    json: {\n      id: item.json.id || `face_${index}`,  // or use filename / name\n      embedding: emb,                       // IMPORTANT: array, not string\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        -64
+      ],
+      "id": "54f14e41-ef9d-4c03-815d-f4391073e488",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9000/embed_cropped",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "face"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        608,
+        -64
+      ],
+      "id": "e4d71b49-627f-4ffb-b4d6-8520d89256aa",
+      "name": "Facenet Embed"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "face_embeddings_video",
+          "mode": "list",
+          "cachedResultName": "face_embeddings_video"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "embedding": "={{ $json.embedding }}",
+            "name": "={{ $('Download file').item.json.name }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": true,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "embedding",
+              "displayName": "embedding",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1024,
+        -64
+      ],
+      "id": "83ada5c5-b44a-4f57-a48d-672b8e7e1cfa",
+      "name": "Insert or update rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "FvssGC3zvsTDRdE9",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9000/preprocess_mtcnn",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "=data"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        240,
+        -64
+      ],
+      "id": "b748fea1-8fbe-4085-a7f9-f4d9f07eb7db",
+      "name": "Preprocessing1"
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanB64(str) {\n  if (!str) return null;\n\n  // remove line breaks\n  str = str.replace(/(\\r\\n|\\n|\\r)/gm, \"\").trim();\n\n  // strip \"data:image/...;base64,\" if present\n  const commaIndex = str.indexOf(\",\");\n  if (commaIndex !== -1) {\n    return str.slice(commaIndex + 1);\n  }\n\n  return str;\n}\n\nreturn items.map(item => {\n  let cropB64 = cleanB64(item.json.face_crop_b64);\n  let previewB64 = cleanB64(item.json.face_preview_b64);\n\n  if (!cropB64) return item;\n\n  const binary = {\n    ...(item.binary || {}),\n    face: {\n      data: cropB64,\n      mimeType: \"image/jpeg\",\n      fileExtension: \"jpg\",\n      fileName: \"face_crop.jpg\",\n    },\n  };\n\n  if (previewB64) {\n    binary.preview = {\n      data: previewB64,\n      mimeType: \"image/jpeg\",\n      fileExtension: \"jpg\",\n      fileName: \"face_preview.jpg\",\n    };\n  }\n\n  return {\n    json: { ...item.json },\n    binary,\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        -64
+      ],
+      "id": "08b9c603-8b02-4e22-9ad8-42f7ab2c9075",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "queryString": ".jpg",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "1sQUYBm7LdjaVA51Od6C-pfzlKkwbFkIL",
+            "mode": "list",
+            "cachedResultName": "Face_Reg",
+            "cachedResultUrl": "https://drive.google.com/drive/folders/1sQUYBm7LdjaVA51Od6C-pfzlKkwbFkIL"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -160,
+        -64
+      ],
+      "id": "c1d4ab9d-21e2-44bf-8c09-ea2eeb336af9",
+      "name": "Search files and folders",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "aZ0wcdY297xIFSBt",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const TOP_N = 5;   // how many closest matches you want from pgvector\n\nreturn items.map(item => {\n  const emb = item.json.embedding;\n\n  if (!Array.isArray(emb) || emb.length === 0) {\n    item.json.query = `\n      SELECT NULL::text AS id, 0::float AS score\n      LIMIT 0;\n    `;\n    return item;\n  }\n\n  // Convert embedding array → pgvector literal\n  const vec = '[' + emb.join(',') + ']';\n\n  // Build SQL:\n  //\n  // We return TOP_N hits instead of just 1.\n  // Score = 1 - distance, but since embeddings are L2-normalized,\n  // <=> already approximates cosine distance well.\n  //\n  // You can apply a threshold later in n8n.\n  //\n  item.json.query = `\n    SELECT \n      id,\n      name,\n      1 - (embedding <=> '${vec}'::vector) AS score\n    FROM face_embeddings_video\n    ORDER BY score DESC\n    LIMIT ${TOP_N};\n  `;\n\n  return item;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        288
+      ],
+      "id": "969fc659-941f-4fbe-805b-26f6e668212c",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8239ae80-4b87-40a6-b65f-a2e90226f4c4",
+              "name": "status",
+              "value": "recognized",
+              "type": "string"
+            },
+            {
+              "id": "b51588ed-82b0-4ce9-b874-348a2f124806",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "4b1b4cda-e7cd-44db-bc69-a54fb619acc8",
+              "name": "=score",
+              "value": "={{ $json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "3d16115f-d02f-4796-adac-81c4d88ba5af",
+              "name": "file_name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "5bbcfe93-1c1b-419e-94a9-ab8d70320f6b",
+              "name": "sunglass",
+              "value": "={{ $('Code in JavaScript2').item.json.has_sunglasses }}",
+              "type": "boolean"
+            },
+            {
+              "id": "1c2d7790-e642-4081-b560-f0e42dc220aa",
+              "name": "mask",
+              "value": "={{ $('Code in JavaScript2').item.json.has_mask }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        144
+      ],
+      "id": "ffaf0e21-92dc-480d-a764-2de50741024b",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9000/embed_cropped",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "=face"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1232,
+        288
+      ],
+      "id": "152b2d6d-547c-4870-899e-43ad760aa3fd",
+      "name": "Facenet Embed1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2432ee5-27ac-4186-aa92-82dcc88a4057",
+              "name": "Status",
+              "value": "=Not Recognized",
+              "type": "string"
+            },
+            {
+              "id": "350e7c8f-ab1a-41e1-b383-b834dc7eebf3",
+              "name": "Id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "864c9590-8b7f-40c2-baec-151d22fbcb9b",
+              "name": "Score",
+              "value": "={{ $json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "064920d0-4aec-4bc8-b19b-94d1f901e938",
+              "name": "Name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        304
+      ],
+      "id": "bb590e04-a87d-4be0-8988-d6ab85ec3b1d",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{$json.query}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1664,
+        288
+      ],
+      "id": "da577681-8a5d-42c6-a0d4-7f6df77dfb67",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "FvssGC3zvsTDRdE9",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "37322ea7-c41f-41ab-b4cc-b29d32970d54",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 0.6,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1872,
+        288
+      ],
+      "id": "e586a549-90e6-499b-8e4a-1b700426267f",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const previewItems = $items('Preview');\n\nconst faceMap = {};\nfor (const p of previewItems) {\n  faceMap[p.json.face_id] = p.binary.face;\n}\n\nreturn items.map(item => {\n  const face_id = item.json.face_id;\n  const faceBinary = faceMap[face_id];\n\n  if (!faceBinary) {\n    throw new Error(`No face binary for face_id ${face_id}`);\n  }\n\n  return {\n    json: item.json,\n    binary: { face: faceBinary },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        288
+      ],
+      "id": "c7a84a44-7f34-4a1d-9034-ba398906b5f7",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const TOP_N = 5;   // how many closest matches you want from pgvector\n\nreturn items.map(item => {\n  const emb = item.json.embedding;\n\n  if (!Array.isArray(emb) || emb.length === 0) {\n    item.json.query = `\n      SELECT NULL::text AS id, 0::float AS score\n      LIMIT 0;\n    `;\n    return item;\n  }\n\n  // Convert embedding array → pgvector literal\n  const vec = '[' + emb.join(',') + ']';\n\n  // Build SQL:\n  //\n  // We return TOP_N hits instead of just 1.\n  // Score = 1 - distance, but since embeddings are L2-normalized,\n  // <=> already approximates cosine distance well.\n  //\n  // You can apply a threshold later in n8n.\n  //\n  item.json.query = `\n    SELECT \n      id,\n      name,\n      1 - (embedding <=> '${vec}'::vector) AS score\n    FROM face_embeddings_video\n    ORDER BY score DESC\n    LIMIT ${TOP_N};\n  `;\n\n  return item;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        496
+      ],
+      "id": "5ec7475d-ec0d-4000-8634-258e46783ec3",
+      "name": "Code in JavaScript4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9000/embed_cropped",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "=face"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1232,
+        496
+      ],
+      "id": "2590bd33-bd02-4573-8154-869ee409ed99",
+      "name": "Facenet Embed2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2432ee5-27ac-4186-aa92-82dcc88a4057",
+              "name": "Status",
+              "value": "=Not Recognized",
+              "type": "string"
+            },
+            {
+              "id": "350e7c8f-ab1a-41e1-b383-b834dc7eebf3",
+              "name": "Id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "864c9590-8b7f-40c2-baec-151d22fbcb9b",
+              "name": "Score",
+              "value": "={{ $json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "064920d0-4aec-4bc8-b19b-94d1f901e938",
+              "name": "Name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        672
+      ],
+      "id": "54694dd3-5f64-450f-86a6-ec4c6fb6949b",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{$json.query}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1664,
+        496
+      ],
+      "id": "e9b7a733-2c26-4d2a-b654-4d9a6517ceac",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "FvssGC3zvsTDRdE9",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "37322ea7-c41f-41ab-b4cc-b29d32970d54",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 0.8,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1872,
+        496
+      ],
+      "id": "0dd0083e-1449-4aa0-9092-ed86fa1289e6",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const previewItems = $items('Preview');\n\nconst faceMap = {};\nfor (const p of previewItems) {\n  faceMap[p.json.face_id] = p.binary.face;\n}\n\nreturn items.map(item => {\n  const face_id = item.json.face_id;\n  const faceBinary = faceMap[face_id];\n\n  if (!faceBinary) {\n    throw new Error(`No face binary for face_id ${face_id}`);\n  }\n\n  return {\n    json: item.json,\n    binary: { face: faceBinary },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        496
+      ],
+      "id": "089f5d01-7710-488a-9b88-cae1fb589565",
+      "name": "Code in JavaScript6"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2432ee5-27ac-4186-aa92-82dcc88a4057",
+              "name": "status",
+              "value": "=recognized",
+              "type": "string"
+            },
+            {
+              "id": "350e7c8f-ab1a-41e1-b383-b834dc7eebf3",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "864c9590-8b7f-40c2-baec-151d22fbcb9b",
+              "name": "score",
+              "value": "={{ $json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "064920d0-4aec-4bc8-b19b-94d1f901e938",
+              "name": "file_name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "f0a1648d-140d-4a3d-9f84-e8913969c4ea",
+              "name": "occlusion",
+              "value": "None",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        480
+      ],
+      "id": "09bdf955-a0a0-4d27-9701-a75af4d3b8f5",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "face_id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        592,
+        400
+      ],
+      "id": "19f73941-93fd-42bb-ade7-d9d160b48dcd",
+      "name": "Merge"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2432,
+        304
+      ],
+      "id": "9d620818-7888-4954-9da6-f98a1276bfe1",
+      "name": "Merge1",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "content": "## Face Recognition - Test"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -784,
+        384
+      ],
+      "typeVersion": 1,
+      "id": "e8dba8de-c559-4c18-bb4c-c2bb9e4a3c26",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9002/detect-mask",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "face_id",
+              "value": "={{ $json.face_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "face"
+            },
+            {
+              "name": "face_id",
+              "value": "={{ $json.face_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        352,
+        1200
+      ],
+      "id": "6f28bb25-063b-4ef8-a84f-5fdfbe71db91",
+      "name": "Mask Detection1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9003/detect-glasses",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "face_id",
+              "value": "={{ $json.face_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "face"
+            },
+            {
+              "name": "face_id",
+              "value": "={{ $json.face_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        352,
+        1040
+      ],
+      "id": "6f48c58f-3995-4692-88c1-9bab9ca4061f",
+      "name": "Glasses Detection1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.1.166:9006/video_preprocess",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"video_base64\":\"{{ $json.data }}\",\"represent_url\":\"http://host.containers.internal:3000/represent\"}",
+        "options": {}
+      },
+      "id": "cf42374d-9281-4fd8-b444-14ce35fb3ef5",
+      "name": "Video Preprocess API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -32,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c316d45b-6e02-4f36-816c-a530d5b98b9e",
+              "leftValue": "={{ $json.has_sunglasses }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "100aa584-f0d3-4321-97c2-21fdfe7ff3d8",
+              "leftValue": "={{ $json.has_mask }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        1120
+      ],
+      "id": "f4f90442-5fe7-4f15-9629-647e05b14d4e",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "operation": "binaryToPropery",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -224,
+        1120
+      ],
+      "id": "62436c11-b360-4331-a4df-6b43c11dc039",
+      "name": "Extract from File1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = [];\nconst item = items[0];\nconst faces = item.json.faces || [];\n\nfor (const face of faces) {\n\n  const face_id = `${face.frame_index ?? 0}_${Math.random()\n    .toString(36)\n    .slice(2, 8)}`;\n\n  let cropB64 = face.face_crop_b64 || '';\n  let previewB64 = face.face_preview_b64 || '';\n\n  if (!cropB64) continue;\n\n  cropB64 = cropB64.replace(/(\\r\\n|\\n|\\r)/gm, '').trim();\n  if (previewB64) {\n    previewB64 = previewB64.replace(/(\\r\\n|\\n|\\r)/gm, '').trim();\n  }\n\n  output.push({\n    json: {\n      ...face,\n      face_id,\n    },\n    binary: {\n      face: {\n        data: cropB64,\n        mimeType: 'image/jpeg',\n        fileExtension: 'jpg',\n        fileName: 'face_crop.jpg',\n      },\n      ...(previewB64\n        ? {\n            preview: {\n              data: previewB64,\n              mimeType: 'image/jpeg',\n              fileExtension: 'jpg',\n              fileName: `${face_id}.jpg`,\n            },\n          }\n        : {}),\n    },\n  });\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        1120
+      ],
+      "id": "20498b7c-0e59-4279-af2c-62ad16b7f565",
+      "name": "Preview1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const TOP_N = 5;   // how many closest matches you want from pgvector\n\nreturn items.map(item => {\n  const emb = item.json.embedding;\n\n  if (!Array.isArray(emb) || emb.length === 0) {\n    item.json.query = `\n      SELECT NULL::text AS id, 0::float AS score\n      LIMIT 0;\n    `;\n    return item;\n  }\n\n  // Convert embedding array → pgvector literal\n  const vec = '[' + emb.join(',') + ']';\n\n  // Build SQL:\n  //\n  // We return TOP_N hits instead of just 1.\n  // Score = 1 - distance, but since embeddings are L2-normalized,\n  // <=> already approximates cosine distance well.\n  //\n  // You can apply a threshold later in n8n.\n  //\n  item.json.query = `\n    SELECT \n      id,\n      name,\n      1 - (embedding <=> '${vec}'::vector) AS score\n    FROM face_embeddings_video\n    ORDER BY score DESC\n    LIMIT ${TOP_N};\n  `;\n\n  return item;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        1008
+      ],
+      "id": "be8bf690-40c9-4a2b-ad18-cb70db0d0b0f",
+      "name": "Code in JavaScript5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8239ae80-4b87-40a6-b65f-a2e90226f4c4",
+              "name": "status",
+              "value": "recognized",
+              "type": "string"
+            },
+            {
+              "id": "b51588ed-82b0-4ce9-b874-348a2f124806",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "4b1b4cda-e7cd-44db-bc69-a54fb619acc8",
+              "name": "=score",
+              "value": "={{ $json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "3d16115f-d02f-4796-adac-81c4d88ba5af",
+              "name": "file_name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "5bbcfe93-1c1b-419e-94a9-ab8d70320f6b",
+              "name": "sunglass",
+              "value": "={{ $('Code in JavaScript7').item.json.has_sunglasses }}",
+              "type": "boolean"
+            },
+            {
+              "id": "1c2d7790-e642-4081-b560-f0e42dc220aa",
+              "name": "mask",
+              "value": "={{ $('Code in JavaScript7').item.json.has_mask }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        864
+      ],
+      "id": "6d5f9f79-884c-495b-b915-a596a8b6412f",
+      "name": "Edit Fields4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9000/embed_cropped",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "=face"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1232,
+        1008
+      ],
+      "id": "0f5f1280-0899-4691-81bd-49905b62e619",
+      "name": "Facenet Embed3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2432ee5-27ac-4186-aa92-82dcc88a4057",
+              "name": "Status",
+              "value": "=Not Recognized",
+              "type": "string"
+            },
+            {
+              "id": "350e7c8f-ab1a-41e1-b383-b834dc7eebf3",
+              "name": "Id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "864c9590-8b7f-40c2-baec-151d22fbcb9b",
+              "name": "Score",
+              "value": "={{ $json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "064920d0-4aec-4bc8-b19b-94d1f901e938",
+              "name": "Name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        1024
+      ],
+      "id": "8f732daf-bfd0-43a4-a426-d34bf7ecc00f",
+      "name": "Edit Fields5"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{$json.query}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1664,
+        1008
+      ],
+      "id": "2c952bdd-825f-4b65-b1f4-f074d8fe152d",
+      "name": "Execute a SQL query2",
+      "credentials": {
+        "postgres": {
+          "id": "FvssGC3zvsTDRdE9",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "37322ea7-c41f-41ab-b4cc-b29d32970d54",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 0.6,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1872,
+        1008
+      ],
+      "id": "01c0fe97-53c2-4f29-825e-c25900a32dff",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const previewItems = $items('Preview1');\n\nconst faceMap = {};\nfor (const p of previewItems) {\n  faceMap[p.json.face_id] = p.binary.face;\n}\n\nreturn items.map(item => {\n  const face_id = item.json.face_id;\n  const faceBinary = faceMap[face_id];\n\n  if (!faceBinary) {\n    throw new Error(`No face binary for face_id ${face_id}`);\n  }\n\n  return {\n    json: item.json,\n    binary: { face: faceBinary },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        1008
+      ],
+      "id": "0e381de9-5cb9-4677-adff-95b937d35bd0",
+      "name": "Code in JavaScript7"
+    },
+    {
+      "parameters": {
+        "jsCode": "const TOP_N = 5;   // how many closest matches you want from pgvector\n\nreturn items.map(item => {\n  const emb = item.json.embedding;\n\n  if (!Array.isArray(emb) || emb.length === 0) {\n    item.json.query = `\n      SELECT NULL::text AS id, 0::float AS score\n      LIMIT 0;\n    `;\n    return item;\n  }\n\n  // Convert embedding array → pgvector literal\n  const vec = '[' + emb.join(',') + ']';\n\n  // Build SQL:\n  //\n  // We return TOP_N hits instead of just 1.\n  // Score = 1 - distance, but since embeddings are L2-normalized,\n  // <=> already approximates cosine distance well.\n  //\n  // You can apply a threshold later in n8n.\n  //\n  item.json.query = `\n    SELECT \n      id,\n      name,\n      1 - (embedding <=> '${vec}'::vector) AS score\n    FROM face_embeddings_video\n    ORDER BY score DESC\n    LIMIT ${TOP_N};\n  `;\n\n  return item;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        1216
+      ],
+      "id": "21d6f1bd-35cc-4367-b523-5650c965dc13",
+      "name": "Code in JavaScript8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.containers.internal:9000/embed_cropped",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "=face"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1232,
+        1216
+      ],
+      "id": "90c3e844-a0ea-407f-a90c-170d61ebd98f",
+      "name": "Facenet Embed4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2432ee5-27ac-4186-aa92-82dcc88a4057",
+              "name": "Status",
+              "value": "=Not Recognized",
+              "type": "string"
+            },
+            {
+              "id": "350e7c8f-ab1a-41e1-b383-b834dc7eebf3",
+              "name": "Id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "864c9590-8b7f-40c2-baec-151d22fbcb9b",
+              "name": "Score",
+              "value": "={{ $json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "064920d0-4aec-4bc8-b19b-94d1f901e938",
+              "name": "Name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        1392
+      ],
+      "id": "d2a2d3e3-462e-4fdd-80de-279dd6dc878c",
+      "name": "Edit Fields6"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{$json.query}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1664,
+        1216
+      ],
+      "id": "521b14de-6b4d-4644-8847-a16397a80bf0",
+      "name": "Execute a SQL query3",
+      "credentials": {
+        "postgres": {
+          "id": "FvssGC3zvsTDRdE9",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "37322ea7-c41f-41ab-b4cc-b29d32970d54",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 0.8,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1872,
+        1216
+      ],
+      "id": "508c38f4-6c14-44f5-97ab-a4b505be5d4d",
+      "name": "If5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const previewItems = $items('Preview1');\n\nconst faceMap = {};\nfor (const p of previewItems) {\n  faceMap[p.json.face_id] = p.binary.face;\n}\n\nreturn items.map(item => {\n  const face_id = item.json.face_id;\n  const faceBinary = faceMap[face_id];\n\n  if (!faceBinary) {\n    throw new Error(`No face binary for face_id ${face_id}`);\n  }\n\n  return {\n    json: item.json,\n    binary: { face: faceBinary },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        1216
+      ],
+      "id": "23bfc473-6da6-47b9-a832-647b85c2777b",
+      "name": "Code in JavaScript9"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2432ee5-27ac-4186-aa92-82dcc88a4057",
+              "name": "status",
+              "value": "=recognized",
+              "type": "string"
+            },
+            {
+              "id": "350e7c8f-ab1a-41e1-b383-b834dc7eebf3",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "864c9590-8b7f-40c2-baec-151d22fbcb9b",
+              "name": "score",
+              "value": "={{ $json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "064920d0-4aec-4bc8-b19b-94d1f901e938",
+              "name": "file_name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "f0a1648d-140d-4a3d-9f84-e8913969c4ea",
+              "name": "occlusion",
+              "value": "None",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        1200
+      ],
+      "id": "e2f75724-5df6-4813-9cca-65c49bdfd3ae",
+      "name": "Edit Fields7"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "face_id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        592,
+        1120
+      ],
+      "id": "ab84581c-3dc4-4a27-82c6-fa1295016ae0",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2432,
+        1024
+      ],
+      "id": "648421a6-0bff-4fd4-930d-84ed80a3355a",
+      "name": "Merge3",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2608,
+        1024
+      ],
+      "id": "4f3be67c-2707-468b-85df-bda2b592657c",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "input_video",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -416,
+        1120
+      ],
+      "id": "2d6dc595-f2f3-4ed2-81db-b2fd63c349e9",
+      "name": "Webhook1",
+      "webhookId": "5e06cc3c-6166-4ea6-9079-88970aa20aff"
+    },
+    {
+      "parameters": {
+        "content": "## Face Recognition"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -736,
+        1088
+      ],
+      "typeVersion": 1,
+      "id": "b461f8e3-c063-4828-8a4c-800a189bb427",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1qg8FOtS8TRnkr7CkBKUr5aa4_5Dsc8I9",
+          "mode": "list",
+          "cachedResultName": "occlusion_vid.mp4",
+          "cachedResultUrl": "https://drive.google.com/file/d/1qg8FOtS8TRnkr7CkBKUr5aa4_5Dsc8I9/view?usp=drivesdk"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -432,
+        400
+      ],
+      "id": "e1dff064-397c-4b67-af58-bb35f7581d08",
+      "name": "Download file1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "aZ0wcdY297xIFSBt",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Face Registration in Vector DB\n"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -784,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "371771e1-330d-43dd-98c4-4a8b007ac1d1",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    },
+    "Mask Detection": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Glasses Detection": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Video Preprocess API2": {
+      "main": [
+        [
+          {
+            "node": "Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Video Preprocess API2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preview": {
+      "main": [
+        [
+          {
+            "node": "Glasses Detection",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mask Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Preprocessing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Insert or update rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facenet Embed": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preprocessing1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Facenet Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search files and folders": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facenet Embed1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Facenet Embed1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facenet Embed2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript6": {
+      "main": [
+        [
+          {
+            "node": "Facenet Embed2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        []
+      ]
+    },
+    "Mask Detection1": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Glasses Detection1": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Video Preprocess API": {
+      "main": [
+        [
+          {
+            "node": "Preview1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File1": {
+      "main": [
+        [
+          {
+            "node": "Video Preprocess API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preview1": {
+      "main": [
+        [
+          {
+            "node": "Glasses Detection1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mask Detection1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields4": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facenet Embed3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query2": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript7": {
+      "main": [
+        [
+          {
+            "node": "Facenet Embed3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript8": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facenet Embed4": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query3": {
+      "main": [
+        [
+          {
+            "node": "If5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If5": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript9": {
+      "main": [
+        [
+          {
+            "node": "Facenet Embed4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields7": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Extract from File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file1": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7a44f19b-af9f-44a3-8446-a7aefcb60295",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f1ec9e448040bd46dc72f791295ca276a6468c56b6b88e8ec86f727b1da7036e"
+  },
+  "id": "DLkJ3twv0igCWm5N",
+  "tags": []
+}
