@@ -1,0 +1,18 @@
+fastapi
+uvicorn
+opencv-python
+pillow
+python-multipart
+
+# ML stack
+numpy<2
+ultralytics
+torch
+torchvision
+
+# YOLOv5 implicit deps
+pandas
+pyyaml
+matplotlib
+tqdm
+seaborn
